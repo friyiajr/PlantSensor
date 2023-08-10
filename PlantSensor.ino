@@ -1,5 +1,8 @@
+#include <string>
 #include "WiFiS3.h"
 #include "arduino_secrets.h"
+
+#define POST_INTERVAL 1000
 
 char ssid[] = WIFI_NETWORK_NAME;
 char pass[] = WIFI_PASSWORD;
@@ -9,9 +12,37 @@ char host[] = HOST;
 int status = WL_IDLE_STATUS;
 
 WiFiClient client;
+unsigned long msecLst = 0;
 
-void setup() 
-{
+void executeRequest() {
+  if (client.connect(server, 8000)) {
+    std::string payloadStart = "{\"moisture\": ";
+    std::string payloadValue = std::to_string(72);
+    std::string payloadEnd = "}";
+    std::string payload = payloadStart + payloadValue + payloadEnd;
+
+    std::string contentStart = "Content-Length: ";
+    std::string contentEnd = std::to_string(payload.length());
+    std::string content = contentStart + contentEnd;
+
+    Serial.print("Sending Soil Moisture Reading: ");
+    Serial.println(content.c_str());
+    Serial.println(payload.c_str());
+    
+    client.println("POST / HTTP/1.1");
+    client.println(host);
+    client.println("Connection: keep-alive");
+    client.println("Accept: application/json");
+    client.println("Content-Type: application/json");
+    client.println(content.c_str());
+    client.println();
+    client.println(payload.c_str());
+
+    Serial.println("Moisture Reading Success");
+  }
+}
+
+void setup() {
   Serial.begin(9600);
   while (!Serial);
   
@@ -21,43 +52,15 @@ void setup()
     // wait 10 seconds for connection:
     delay(10000);
   }
- 
-  Serial.println("\nStarting connection to server...");
-  if (client.connect(server, 8000)) {
-    Serial.println("connected to server");
-    client.println("GET / HTTP/1.1");
-    client.println(host);
-    client.println("Connection: keep-alive");
-    client.println();
-    client.println();
-  }
 }
 
-/* just wrap the received data up to 80 columns in the serial print*/
-/* -------------------------------------------------------------------------- */
-void read_response() {
-/* -------------------------------------------------------------------------- */  
-  uint32_t received_data_num = 0;
-  while (client.available()) {
-    /* actual data reception */
-    char c = client.read();
-    /* print data to serial port */
-    Serial.print(c);
-    /* wrap data to 80 columns*/
-    received_data_num++;
-    if(received_data_num % 80 == 0) { 
-      Serial.println();
-    }
-  }  
-}
-
-/* -------------------------------------------------------------------------- */
 void loop() {
-/* -------------------------------------------------------------------------- */  
-  read_response();
+  unsigned long msec = millis();
 
-  // if the server's disconnected, stop the client:
-  if (!client.connected()) {
+  if ((msec - msecLst) > POST_INTERVAL)  {
+      msecLst = msec;
+      executeRequest();
+  } else if (!client.connected()) {
     Serial.println();
     Serial.println("disconnecting from server.");
     client.stop();
