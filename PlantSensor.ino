@@ -2,7 +2,7 @@
 #include "WiFiS3.h"
 #include "arduino_secrets.h"
 
-#define POST_INTERVAL 1000
+#define POST_INTERVAL 10000
 
 char ssid[] = WIFI_NETWORK_NAME;
 char pass[] = WIFI_PASSWORD;
@@ -13,12 +13,13 @@ int status = WL_IDLE_STATUS;
 
 WiFiClient client;
 unsigned long msecLst = 0;
+int soilMoistureValue = -1;
 
-void executeRequest() {
+void executeRequest(int moistureValue) {
   if (client.connect(server, 8000)) {
     std::string payloadStart = "{\"moisture\": ";
-    std::string payloadValue = std::to_string(72);
-    std::string payloadEnd = "}";
+    std::string payloadValue = std::to_string(moistureValue);
+    std::string payloadEnd = ", \"userId\": \"0000001\"}";
     std::string payload = payloadStart + payloadValue + payloadEnd;
 
     std::string contentStart = "Content-Length: ";
@@ -29,7 +30,7 @@ void executeRequest() {
     Serial.println(content.c_str());
     Serial.println(payload.c_str());
     
-    client.println("POST / HTTP/1.1");
+    client.println("POST /sample HTTP/1.1");
     client.println(host);
     client.println("Connection: keep-alive");
     client.println("Accept: application/json");
@@ -56,10 +57,11 @@ void setup() {
 
 void loop() {
   unsigned long msec = millis();
+  soilMoistureValue = analogRead(A0);
 
-  if ((msec - msecLst) > POST_INTERVAL)  {
-      msecLst = msec;
-      executeRequest();
+  if ((msec - msecLst) > POST_INTERVAL) {
+    msecLst = msec;
+    executeRequest(soilMoistureValue);
   } else if (!client.connected()) {
     Serial.println();
     Serial.println("disconnecting from server.");
